@@ -1,78 +1,148 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8" />
-  <title>簡易連線象棋</title>
-  <style>
-    body { font-family: sans-serif; }
-    #board { display: grid; grid-template-columns: repeat(9, 50px); grid-template-rows: repeat(10, 50px); gap: 2px; margin-top: 20px; }
-    .cell { width: 50px; height: 50px; border: 1px solid #444; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; }
-    .selected { background: yellow; }
-  </style>
+<meta charset="UTF-8">
+<title>最基本象棋連線示範</title>
+<style>
+  body { font-family: sans-serif; }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(9, 60px);
+    grid-template-rows: repeat(10, 60px);
+    gap: 2px;
+    margin-top: 20px;
+  }
+  .cell {
+    width: 60px;
+    height: 60px;
+    border: 1px solid #444;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:28px;
+    cursor:pointer;
+  }
+  .selected {
+    background: yellow;
+  }
+</style>
 </head>
+
 <body>
-  <h2>簡易象棋連線示範</h2>
-  <p>打開兩台電腦，用相同網址連進來即可連線（依靠 WebSocket 伺服器）。</p>
+<h2>最基本象棋（可移動、可連線，不含規則）</h2>
+<p>兩台電腦打開相同網址即可同步移動。</p>
 
-  <div>
-    <label>玩家名稱：</label>
-    <input id="nameInput" />
-    <button onclick="connectWS()">連線</button>
-  </div>
+<div>
+  <label>玩家名稱：</label>
+  <input id="nameInput" />
+  <button onclick="connectWS()">連線</button>
+</div>
 
-  <div id="status">未連線</div>
+<div id="status">未連線</div>
 
-  <div id="board"></div>
+<div id="board"></div>
 
 <script>
-// --- 簡易棋盤（不是完整象棋邏輯，只是示範同步 ---
-let selected = null;
-let boardEl = document.getElementById("board");
+// WebSocket（使用公開 echo 伺服器）
 let ws;
 
+// 棋子資料（最基本的）
+const initialPieces = {
+  // 黑方
+  0: "車", 1: "馬", 2: "象", 3: "士", 4: "將", 5: "士", 6: "象", 7: "馬", 8: "車",
+  19: "炮", 25: "炮",
+  27: "卒", 29: "卒", 31: "卒", 33: "卒", 35: "卒",
+
+  // 紅方
+  90 - 9:  "車", 90 - 8: "馬", 90 - 7: "象", 90 - 6: "士",
+  90 - 5:  "帥",
+  90 - 4:  "士", 90 - 3: "象", 90 - 2: "馬", 90 - 1: "車",
+
+  90 - 19: "炮", 90 - 25: "炮",
+  90 - 27: "兵", 90 - 29: "兵", 90 - 31: "兵", 90 - 33: "兵", 90 - 35: "兵"
+};
+
+let board = new Array(90).fill("");
+Object.keys(initialPieces).forEach(i => board[i] = initialPieces[i]);
+
+let selected = null;
+let boardEl = document.getElementById("board");
+
+// 建立棋盤格子
 function makeBoard() {
-  for (let i=0;i<90;i++) {
-    let cell = document.createElement('div');
-    cell.className = 'cell';
+  for (let i = 0; i < 90; i++) {
+    let cell = document.createElement("div");
+    cell.className = "cell";
     cell.dataset.idx = i;
     cell.onclick = () => clickCell(i);
     boardEl.appendChild(cell);
   }
+  render();
 }
 makeBoard();
 
+// 更新畫面
+function render() {
+  for (let i = 0; i < 90; i++) {
+    const cell = boardEl.children[i];
+    cell.textContent = board[i];
+    cell.classList.remove("selected");
+  }
+  if (selected !== null) {
+    boardEl.children[selected].classList.add("selected");
+  }
+}
+
+// 處理點擊格子
+function clickCell(i) {
+  if (!ws || ws.readyState !== 1) return;
+
+  if (selected === null) {
+    // 選棋子
+    if (board[i] !== "") {
+      selected = i;
+      ws.send(JSON.stringify({ type: "select", idx: i }));
+    }
+  } else {
+    // 移動棋子
+    ws.send(JSON.stringify({ type: "move", from: selected, to: i }));
+    applyMove(selected, i);
+    selected = null;
+  }
+  render();
+}
+
+// 套用移動
+function applyMove(from, to) {
+  board[to] = board[from];
+  board[from] = "";
+  selected = null;
+  render();
+}
+
+// WebSocket 連線
 function connectWS() {
-  const name = document.getElementById('nameInput').value || "玩家";
-  ws = new WebSocket("wss://ws.postman-echo.com/raw"); // 公開可用 echo WS
+  const name = document.getElementById("nameInput").value || "玩家";
+  ws = new WebSocket("wss://ws.postman-echo.com/raw");
 
   ws.onopen = () => {
-    document.getElementById('status').innerText = "已連線";
-    ws.send(JSON.stringify({type:"join", name}));
+    document.getElementById("status").innerText = "已連線";
+    ws.send(JSON.stringify({ type: "join", name }));
   };
 
-  ws.onmessage = (msg) => {
+  ws.onmessage = msg => {
     let data;
     try { data = JSON.parse(msg.data); } catch { return; }
 
-    if (data.type === 'move') {
-      applyMove(data.idx);
+    if (data.type === "select") {
+      selected = data.idx;
+      render();
+    }
+
+    if (data.type === "move") {
+      applyMove(data.from, data.to);
     }
   };
-}
-
-function clickCell(i) {
-  if (!ws || ws.readyState !== 1) return;
-  ws.send(JSON.stringify({type:'move', idx:i}));
-  applyMove(i);
-}
-
-function applyMove(i) {
-  // 單純標記一格為選取狀態
-  if (selected !== null) {
-    boardEl.children[selected].classList.remove('selected');
-  }
-  selected = i;
-  boardEl.children[i].classList.add('selected');
 }
 </script>
 </body>
