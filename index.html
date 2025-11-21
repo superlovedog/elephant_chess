@@ -123,7 +123,7 @@ function applyMove(from, to) {
 // WebSocket 連線
 function connectWS() {
   const name = document.getElementById("nameInput").value || "玩家";
-  ws = new WebSocket("wss://ws.postman-echo.com/raw");
+  ws = new WebSocket("wss://ws.ifelse.io");
 
   ws.onopen = () => {
     document.getElementById("status").innerText = "已連線";
