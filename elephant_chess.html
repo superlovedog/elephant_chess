@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>簡易連線象棋</title>
+  <style>
+    body { font-family: sans-serif; }
+    #board { display: grid; grid-template-columns: repeat(9, 50px); grid-template-rows: repeat(10, 50px); gap: 2px; margin-top: 20px; }
+    .cell { width: 50px; height: 50px; border: 1px solid #444; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; }
+    .selected { background: yellow; }
+  </style>
+</head>
+<body>
+  <h2>簡易象棋連線示範</h2>
+  <p>打開兩台電腦，用相同網址連進來即可連線（依靠 WebSocket 伺服器）。</p>
+
+  <div>
+    <label>玩家名稱：</label>
+    <input id="nameInput" />
+    <button onclick="connectWS()">連線</button>
+  </div>
+
+  <div id="status">未連線</div>
+
+  <div id="board"></div>
+
+<script>
+// --- 簡易棋盤（不是完整象棋邏輯，只是示範同步 ---
+let selected = null;
+let boardEl = document.getElementById("board");
+let ws;
+
+function makeBoard() {
+  for (let i=0;i<90;i++) {
+    let cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.dataset.idx = i;
+    cell.onclick = () => clickCell(i);
+    boardEl.appendChild(cell);
+  }
+}
+makeBoard();
+
+function connectWS() {
+  const name = document.getElementById('nameInput').value || "玩家";
+  ws = new WebSocket("wss://ws.postman-echo.com/raw"); // 公開可用 echo WS
+
+  ws.onopen = () => {
+    document.getElementById('status').innerText = "已連線";
+    ws.send(JSON.stringify({type:"join", name}));
+  };
+
+  ws.onmessage = (msg) => {
+    let data;
+    try { data = JSON.parse(msg.data); } catch { return; }
+
+    if (data.type === 'move') {
+      applyMove(data.idx);
+    }
+  };
+}
+
+function clickCell(i) {
+  if (!ws || ws.readyState !== 1) return;
+  ws.send(JSON.stringify({type:'move', idx:i}));
+  applyMove(i);
+}
+
+function applyMove(i) {
+  // 單純標記一格為選取狀態
+  if (selected !== null) {
+    boardEl.children[selected].classList.remove('selected');
+  }
+  selected = i;
+  boardEl.children[i].classList.add('selected');
+}
+</script>
+</body>
+</html>
